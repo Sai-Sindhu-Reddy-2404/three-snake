@@ -1,0 +1,23 @@
+{
+  "name": "three-snake",
+  "version": "1.0.0",
+  "description": "3d snake using threejs",
+  "main": "index.html",
+  "dependencies": {
+    "three": "^0.91.0"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/krisgardiner/three-snake.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/krisgardiner/three-snake/issues"
+  },
+  "homepage": "https://github.com/krisgardiner/three-snake#readme"
+}
