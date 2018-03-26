@@ -80,9 +80,9 @@
 </head>
 
 <body>
-	<script src="node_modules/three/build/three.js"></script>
-	<script src="node_modules/three/examples/js/controls/PointerLockControls.js"></script>
-	<script src="node_modules/three/examples/js/libs/tween.min.js"></script>
+	<script src="../node_modules/three/build/three.js"></script>
+	<script src="../node_modules/three/examples/js/controls/PointerLockControls.js"></script>
+	<script src="../node_modules/three/examples/js/libs/tween.min.js"></script>
 	<div id="scoreboard">
 		<span id="score"></span>
 	</div>
@@ -206,7 +206,7 @@
 			startTime = performance.now();
 			prevTime = performance.now();
 
-			camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 1, 1000);
+			camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 1, 2000);
 			scene = new THREE.Scene();
 			scene.background = new THREE.Color(0xffffff);
 			scene.fog = new THREE.Fog(0xffffff, 0, 750);
@@ -255,7 +255,7 @@
 			// dot objects
 			dotGeometry = new THREE.SphereGeometry(bodyPartSize / 2, 32, 32);
 			dot = new THREE.Mesh(dotGeometry, new THREE.MeshLambertMaterial({
-				color: 0xffff00
+				color: "rgb(255, 255, 255)"
 			}));
 			dot.position.set(0, 10, 0);
 			dot.name = 'dot';
