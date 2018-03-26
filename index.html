@@ -89,7 +89,7 @@
 	<div id="blocker">
 		<div id="instructions">
 			<span id="textOne">Click to play</span><br />
-			<span id="textTwo">Don't run into your tail, eat as many dots as you can!</span>
+			<span id="textTwo">Don't run into your tail, eat as many dots as you can! <br />Tip: Your tail won't like it when you pass the boundaries.</span>
 		</div>
 	</div>
 
@@ -132,7 +132,8 @@
 			speed = 400.0;
 		var parent, bodyGeometry, bodyMaterial, consumeDot = false;
 		var eatDotPosition = new THREE.Vector3(),
-			currentGlobalPos = new THREE.Vector3();
+			currentGlobalPos = new THREE.Vector3(),
+			currentBoundsPos = new THREE.Vector3();
 
 		var body = {
 			snake: [{
@@ -230,6 +231,7 @@
 				wireframe: true
 			}));
 			boundary.position.set(0, 250, 0);
+			boundary.geometry.computeBoundingBox();
 			scene.add(boundary);
 			corners = findCorners(boundary);
 
@@ -255,7 +257,7 @@
 			// dot objects
 			dotGeometry = new THREE.SphereGeometry(bodyPartSize / 2, 32, 32);
 			dot = new THREE.Mesh(dotGeometry, new THREE.MeshLambertMaterial({
-				color: "rgb(255, 255, 255)"
+				color: 0xffffff
 			}));
 			dot.position.set(0, 10, 0);
 			dot.name = 'dot';
@@ -284,13 +286,15 @@
 
 			raycaster.setFromCamera(center.normalize(), camera);
 			let intersects = raycaster.intersectObjects(scene.children);
+
+
 			if (intersects.length > 0) {
 				let cameraPos = new THREE.Vector3();
 				cameraPos.setFromMatrixPosition(camera.matrixWorld);
 				let distance = distanceVector(cameraPos, intersects[0].object.position);
 
 				if (intersects[0].object.name == 'dot'){
-					console.log('dot detected');
+					// console.log('dot detected');
 
 					//CONSUMES DOTS
 					if (distance < 12) {
@@ -354,9 +358,29 @@
 			// 	velocity.x -= direction.x * 400.0 * delta;
 			// }
 
-			controls.getObject().translateX(velocity.x * delta);
-			controls.getObject().translateY(velocity.y * delta);
-			controls.getObject().translateZ(velocity.z * delta);
+			snake.getWorldPosition(currentBoundsPos);
+			// object.position.x += vx;
+			// var objHalfWidth = object.geometry.parameters.width / 2;
+			if (currentBoundsPos.x > boundary.geometry.boundingBox.max.x){
+				console.log(`Passed max.x: ${currentBoundsPos.x}`);
+			  snake.position.setX((currentBoundsPos.x*-1) + bodyPartSize/2);
+			}
+			if (currentBoundsPos.x < boundary.geometry.boundingBox.min.x){
+				console.log(`Passed min.x: ${currentBoundsPos.x}`);
+				snake.position.setX((currentBoundsPos.x*-1) - bodyPartSize/2);
+			}
+			if (currentBoundsPos.z > boundary.geometry.boundingBox.max.z){
+				console.log(`Passed max.z: ${currentBoundsPos.z}`);
+				snake.position.setZ((currentBoundsPos.z*-1) + bodyPartSize/2);
+			}
+			if (currentBoundsPos.z < boundary.geometry.boundingBox.min.z){
+				console.log(`Passed min.z: ${currentBoundsPos.z}`);
+				snake.position.setZ((currentBoundsPos.z*-1) - bodyPartSize/2);
+			}
+
+			snake.translateX(velocity.x * delta);
+			snake.translateY(velocity.y * delta);
+			snake.translateZ(velocity.z * delta);
 
 
 			renderer.render(scene, camera);
@@ -364,7 +388,6 @@
 			prevTime = time;
 
 		} //END RENDER
-
 
 
 		function trackPositionMovement() {
@@ -395,28 +418,31 @@
 					body.snake[0].positions.pop();
 				}
 
+
 				//update all position tracking values for each body part
 				for (let i = 0; i < bodyParts.length - 1; i++) {
-					body.snake[i + 1].positions.unshift(body.snake[i].positions[2]);
+					body.snake[i + 1].positions.unshift(body.snake[i].positions[1]);
 
-					// console.log(`body.snake[i + 1].positions: ${body.snake[i + 1].positions[0].x}, ${body.snake[i + 1].positions[0].y}, ${body.snake[i + 1].positions[0].z}`);
 					if (body.snake[i + 1].positions.length > 5) {
 						body.snake[i + 1].positions.pop();
 					}
 
 					//animate movement to new position
-					// console.log(`moving bodyParts[${i+1}] to: ${body.snake[i + 1].positions[0].x}, ${body.snake[i + 1].positions[0].y}, ${body.snake[i + 1].positions[0].z}`);
 					let object = bodyParts[i+1];
 
-					// console.log(`bodyParts[${i+1}] positions: ${body.snake[i+1].positions[0].z}, ${body.snake[i+1].positions[1].x}, ${body.snake[i+1].positions[2].x}, ${body.snake[i+1].positions[3].x}, ${body.snake[i+1].positions[4].x} `);
+					// jump to new position
+					// object.position.x = body.snake[i+1].positions[0].x,
+					// object.position.y = body.snake[i+1].positions[0].y,
+					// object.position.z = body.snake[i+1].positions[0].z;
 
-					new TWEEN.Tween(object.position).to({
-						x: body.snake[i+1].positions[0].x,
-						y: body.snake[i+1].positions[0].y,
-						z: body.snake[i+1].positions[0].z
-					}, 250).easing(TWEEN.Easing.Linear.None).start();
+					//animate to new position
+						new TWEEN.Tween(object.position).to({
+							x: body.snake[i+1].positions[0].x,
+							y: body.snake[i+1].positions[0].y,
+							z: body.snake[i+1].positions[0].z
+						}, 250).easing(TWEEN.Easing.Linear.None).start();
 
-				}
+					}
 
 				// new TWEEN.Tween(bodyParts[0].rotation).to({
 				// 	x: body.snake[1].positions[0].x,
@@ -433,7 +459,8 @@
 			body.snake.push({
 				part: "body",
 				positions: [],
-				rotations: []
+				rotations: [],
+				crossingBoundary: false
 			});
 
 			// console.log(`body.snake.length: ${body.snake.length}`);
