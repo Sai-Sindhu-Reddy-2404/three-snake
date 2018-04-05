@@ -121,7 +121,7 @@
 		var direction = new THREE.Vector3();
 		var raycaster, objectDetect;
 		var center = new THREE.Vector2(0, 0);
-		var INTERSECTED, MAX_SPEED = 3000;
+		var INTERSECTED, MAX_SPEED = 1000;
 
 		var snake, bodyPartSize = 20,
 			bodyParts = [],
@@ -230,7 +230,7 @@
 				color: 0x65d9ee,
 				wireframe: true
 			}));
-			boundary.position.set(0, 250, 0);
+			boundary.position.set(0, 250.5, 0);
 			boundary.geometry.computeBoundingBox();
 			scene.add(boundary);
 			corners = findCorners(boundary);
@@ -349,18 +349,12 @@
 
 			// velocity.y -= 9.8 /** 100.0*/ * delta; // 100.0 = mass
 			direction.z = Number(moveForward) - Number(moveBackward);
-			// direction.x = Number( moveLeft ) - Number( moveRight );
-			// direction.y = Number( moveUp ) - Number( moveDown );
 
 			direction.normalize(); // this ensures consistent movements in all directions
 			if (moveForward || moveBackward) velocity.z -= direction.z * speed * delta;
-			// if ( moveLeft || moveRight ) {
-			// 	velocity.x -= direction.x * 400.0 * delta;
-			// }
 
 			snake.getWorldPosition(currentBoundsPos);
-			// object.position.x += vx;
-			// var objHalfWidth = object.geometry.parameters.width / 2;
+
 			if (currentBoundsPos.x > boundary.geometry.boundingBox.max.x){
 				console.log(`Passed max.x: ${currentBoundsPos.x}`);
 			  snake.position.setX((currentBoundsPos.x*-1) + bodyPartSize/2);
@@ -393,9 +387,6 @@
 		function trackPositionMovement() {
 
 			snake.getWorldPosition(currentGlobalPos);
-			// console.log(`trackPositionMovement: ${currentGlobalPos.x}, ${currentGlobalPos.y}, ${currentGlobalPos.z}`);
-			// console.log(`trackPositionMovement snakePrevPos: ${snakePrevPos.x}, ${snakePrevPos.y}, ${snakePrevPos.z}`);
-			// console.log(`trackPositionMovement currentGlobalPos: ${currentGlobalPos.x}, ${currentGlobalPos.y}, ${currentGlobalPos.z}`);
 			let distance = distanceVector(snakePrevPos, currentGlobalPos);
 			// console.log(`trackPositionMovement distance: ${distance}`);
 
@@ -430,11 +421,6 @@
 					//animate movement to new position
 					let object = bodyParts[i+1];
 
-					// jump to new position
-					// object.position.x = body.snake[i+1].positions[0].x,
-					// object.position.y = body.snake[i+1].positions[0].y,
-					// object.position.z = body.snake[i+1].positions[0].z;
-
 					//animate to new position
 						new TWEEN.Tween(object.position).to({
 							x: body.snake[i+1].positions[0].x,
@@ -443,13 +429,6 @@
 						}, 250).easing(TWEEN.Easing.Linear.None).start();
 
 					}
-
-				// new TWEEN.Tween(bodyParts[0].rotation).to({
-				// 	x: body.snake[1].positions[0].x,
-				// 	y: body.snake[1].positions[0].y,
-				// 	z: body.snake[1].positions[0].z
-				// }, 150).start();
-
 				snakePrevPos.set(currentGlobalPos.x, currentGlobalPos.y, currentGlobalPos.z);
 			}
 		} //END trackPositionMovement()
@@ -463,14 +442,9 @@
 				crossingBoundary: false
 			});
 
-			// console.log(`body.snake.length: ${body.snake.length}`);
-
 			let prevBodyPartPosition = body.snake[(bodyParts.length - 1)].positions[0];
-			// console.log(`prevBodyPartPosition: ${body.snake[(bodyParts.length - 1)].positions[1].x}, ${body.snake[(bodyParts.length - 1)].positions[1].y}, ${body.snake[(bodyParts.length - 1)].positions[1].z}`);
 
 			let bodyMesh = new THREE.Mesh(bodyGeometry, bodyMaterial);
-
-			// console.log(`body.snake[${bodyParts.length}].positions.length: ${body.snake[bodyParts.length].positions.length}`);
 
 			bodyMesh.position.set(
 				prevBodyPartPosition.x,
@@ -480,10 +454,8 @@
 
 			bodyMesh.name = 'bodyPart';
 
-			// console.log(`bodyMesh.position: ${bodyMesh.position.x}, ${bodyMesh.position.y}, ${bodyMesh.position.z}`);
 			bodyParts.push(bodyMesh);
 			scene.add(bodyMesh);
-			// console.log(`Body length: ${bodyParts.length}`);
 		}
 
 		function addEntity(object) {
@@ -492,16 +464,10 @@
 				c3 = corners[2],
 				c4 = corners[3];
 			//-250, 250, 250, -250
-			// console.log(`addEntity: ${c1.x}, ${c3.x}, ${c1.z}, ${c2.z}`);
 			let x = Math.floor(Math.random() * (250 - bodyPartSize/2)) + 1; // this will get a number between 1 and 240;
 			x *= Math.floor(Math.random() * 2) == 1 ? 1 : -1;
 			let z = Math.floor(Math.random() * (250 - bodyPartSize/2)) + 1; // this will get a number between 1 and 240;
 			z *= Math.floor(Math.random() * 2) == 1 ? 1 : -1;
-			// let x =	Math.floor(Math.random() * c3.x) - c1.x;
-			// let y = Math.floor(Math.random());
-			// let z =	Math.floor(Math.random() * c2.z) - c1.z;
-			// console.log(`in addEntity: ${x}, ${z}`);
-
 
 			object.position.set(x, 10, z); // on flat plane temporarily
 			scene.add(object);
@@ -513,7 +479,6 @@
 			let depth = object.geometry.parameters.depth;
 
 			let corners = [];
-			let c = [];
 			corners.push(new THREE.Vector3(object.position.x + width / 2, object.position.y + height / 2, object.position.z + depth / 2));
 			corners.push(new THREE.Vector3(object.position.x + width / 2, object.position.y + height / 2, object.position.z - depth / 2));
 			corners.push(new THREE.Vector3(object.position.x + width / 2, object.position.y - height / 2, object.position.z + depth / 2));
@@ -523,14 +488,6 @@
 			corners.push(new THREE.Vector3(object.position.x - width / 2, object.position.y - height / 2, object.position.z + depth / 2));
 			corners.push(new THREE.Vector3(object.position.x - width / 2, object.position.y - height / 2, object.position.z - depth / 2));
 
-			// console.log(`corners in findCorners: ${corners[1].x}, ${corners[1].y}, ${corners[1].z}`);
-			for (let i = 0; i < corners.length; i++) {
-				c.push(new THREE.Mesh(new THREE.SphereGeometry(10, 32, 32), new THREE.MeshLambertMaterial({
-					color: 0xffff00
-				})));
-				c[i].position.set(corners[i].x, corners[i].y, corners[i].z);
-				scene.add(c[i]);
-			}
 			return corners;
 		}
 
@@ -560,11 +517,6 @@
 
 		function onKeyDown(event) {
 			console.log(`Key: ${event.keyCode}`);
-			// if (event.keyCode == 87) { //w
-				// controls.getObject().position.setY( velocity.y * 2 );
-			// } else if (event.keyCode == 83) {
-				// controls.getObject().translateY( -velocity.y * 1 );
-			// }
 		}
 
 		function onWindowResize() {
