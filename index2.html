@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>THREE - SNAKE</title>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+		<style>
+			html, body {
+				width: 100%;
+				height: 100%;
+			}
+			body {
+				background-color: #ffffff;
+				margin: 0;
+				overflow: hidden;
+				font-family: arial;
+			}
+			#blocker {
+				position: absolute;
+				width: 100%;
+				height: 100%;
+				background-color: rgba(0,0,0,0.5);
+			}
+			#instructions {
+				width: 100%;
+				height: 100%;
+				display: -webkit-box;
+				display: -moz-box;
+				display: box;
+				-webkit-box-orient: horizontal;
+				-moz-box-orient: horizontal;
+				box-orient: horizontal;
+				-webkit-box-pack: center;
+				-moz-box-pack: center;
+				box-pack: center;
+				-webkit-box-align: center;
+				-moz-box-align: center;
+				box-align: center;
+				color: #ffffff;
+				text-align: center;
+				cursor: pointer;
+			}
+		</style>
+	</head>
+	<body>
+		<script src="node_modules/three/build/three.js"></script>
+		<script src="node_modules/three/examples/js/controls/PointerLockControls.js"></script>
+
+		<div id="blocker">
+			<div id="instructions">
+				<span style="font-size:40px">Click to play</span>
+				<br />
+				Don't run into your tail, eat as many dots as you can!
+			</div>
+		</div>
+
+		<script>
+			var camera, scene, renderer, controls;
+			var dotContainer = [], dot, dotGeometry;
+			var blocker = document.getElementById( 'blocker' );
+			var instructions = document.getElementById( 'instructions' );
+			// http://www.html5rocks.com/en/tutorials/pointerlock/intro/
+
+
+			var controlsEnabled = false;
+			var moveForward = true;
+			var moveBackward = false;
+			var moveLeft = false;
+			var moveRight = false;
+			var canJump = false;
+			var startTime = performance.now();
+			var prevTime = performance.now();
+			var velocity = new THREE.Vector3();
+			var direction = new THREE.Vector3();
+			var raycaster, objectDetect;
+			var center = new THREE.Vector2(0, 0);
+			var INTERSECTED;
+			var snake, tail = [];
+			// var center2 = new THREE.Vector3( 0, 0, 0.5 );
+			var boundary, boxGeometry, floor, corners = [], points = 0;
+
+
+
+			var havePointerLock = 'pointerLockElement' in document || 'mozPointerLockElement' in document || 'webkitPointerLockElement' in document;
+			if ( havePointerLock ) {
+				var element = document.body;
+				var pointerlockchange = function ( event ) {
+					if ( document.pointerLockElement === element || document.mozPointerLockElement === element || document.webkitPointerLockElement === element ) {
+						controlsEnabled = true;
+						controls.enabled = true;
+						blocker.style.display = 'none';
+					} else {
+						controls.enabled = false;
+						blocker.style.display = 'block';
+						instructions.style.display = '';
+					}
+				};
+				var pointerlockerror = function ( event ) {
+					instructions.style.display = '';
+				};
+				// Hook pointer lock state change events
+				document.addEventListener( 'pointerlockchange', pointerlockchange, false );
+				document.addEventListener( 'mozpointerlockchange', pointerlockchange, false );
+				document.addEventListener( 'webkitpointerlockchange', pointerlockchange, false );
+				document.addEventListener( 'pointerlockerror', pointerlockerror, false );
+				document.addEventListener( 'mozpointerlockerror', pointerlockerror, false );
+				document.addEventListener( 'webkitpointerlockerror', pointerlockerror, false );
+				instructions.addEventListener( 'click', function ( event ) {
+					instructions.style.display = 'none';
+					// Ask the browser to lock the pointer
+					element.requestPointerLock = element.requestPointerLock || element.mozRequestPointerLock || element.webkitRequestPointerLock;
+					element.requestPointerLock();
+
+				}, false );
+			} else {
+				instructions.innerHTML = 'Your browser doesn\'t seem to support Pointer Lock API';
+			}
+
+
+			init();
+			animate();
+
+			function init() {
+				camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 1, 1000 );
+				scene = new THREE.Scene();
+				scene.background = new THREE.Color( 0xffffff );
+				scene.fog = new THREE.Fog( 0xffffff, 0, 750 );
+				var light = new THREE.HemisphereLight( 0xeeeeff, 0x777788, 0.75 );
+				light.position.set( 0.5, 1, 0.75 );
+				scene.add( light );
+				controls = new THREE.PointerLockControls( camera );
+				snake = controls.getObject();
+				snake.position.set(0, 0, 250);
+				scene.add( snake );
+
+				// raycaster = new THREE.Raycaster( new THREE.Vector3(), new THREE.Vector3( 0, - 1, 0 ), 0, 10 );
+				raycaster = new THREE.Raycaster();
+				// objectDetect.set( camera.getWorldPosition(), camera.getWorldDirection().normalize() );
+
+        // floor
+        var floorGeometry = new THREE.PlaneGeometry( 500, 500, 10, 10 );
+				floorGeometry.rotateX( - Math.PI / 2 );
+				var floorMaterial = new THREE.MeshBasicMaterial( { color: 0x800000 } );
+				floor = new THREE.Mesh( floorGeometry, floorMaterial );
+				scene.add( floor );
+
+        boxGeometry = new THREE.BoxGeometry( 500, 500, 500, 10, 10, 10 );
+				// rightGeometry.rotateX(  Math.PI / 2 );
+
+				boundary = new THREE.Mesh( boxGeometry, new THREE.MeshBasicMaterial({ color: 0x65d9ee, wireframe: true })  );
+        boundary.position.set(0,250,0);
+				scene.add( boundary );
+				// console.log(`init boundary: ${boundary.geometry.parameters.width}, ${boundary.geometry.parameters.height}, ${boundary.geometry.parameters.depth}; position: ${boundary.position.x}, ${boundary.position.y}, ${boundary.position.z}`);
+				corners = findCorners(boundary);
+				console.log(`init corners: ${corners[0].x}`);
+
+				// objects
+				dotGeometry = new THREE.SphereGeometry( 10, 32, 32 );
+				dot = new THREE.Mesh( dotGeometry, new THREE.MeshLambertMaterial( { color: 0xffff00 } ) );
+				dot.position.set(0,10,0);
+				dotContainer.push( dot );
+				// console.log(`objects in init: ${objects}`);
+				scene.add( dot );
+				// console.log(`objects in init after scene add: ${objects}`);
+
+				// for ( var i = 0, l = boxGeometry.faces.length; i < l; i ++ ) {
+				// 	var face = boxGeometry.faces[ i ];
+				// 	face.vertexColors[ 0 ] = new THREE.Color().setHSL( Math.random() * 0.3 + 0.5, 0.75, Math.random() * 0.25 + 0.75 );
+				// 	face.vertexColors[ 1 ] = new THREE.Color().setHSL( Math.random() * 0.3 + 0.5, 0.75, Math.random() * 0.25 + 0.75 );
+				// 	face.vertexColors[ 2 ] = new THREE.Color().setHSL( Math.random() * 0.3 + 0.5, 0.75, Math.random() * 0.25 + 0.75 );
+				// }
+				// for ( var i = 0; i < 500; i ++ ) {
+				// 	var boxMaterial = new THREE.MeshPhongMaterial( { specular: 0xffffff, flatShading: true, vertexColors: THREE.VertexColors } );
+				// 	boxMaterial.color.setHSL( Math.random() * 0.2 + 0.5, 0.75, Math.random() * 0.25 + 0.75 );
+				// 	var box = new THREE.Mesh( boxGeometry, boxMaterial );
+				// 	box.position.x = Math.floor( Math.random() * 20 - 10 ) * 20;
+				// 	box.position.y = Math.floor( Math.random() * 20 ) * 20 + 10;
+				// 	box.position.z = Math.floor( Math.random() * 20 - 10 ) * 20;
+				// 	scene.add( box );
+				// 	objects.push( box );
+				// }
+
+				renderer = new THREE.WebGLRenderer();
+				renderer.setPixelRatio( window.devicePixelRatio );
+				renderer.setSize( window.innerWidth, window.innerHeight );
+				document.body.appendChild( renderer.domElement );
+
+				// document.addEventListener('mousemove', onDocumentMouseMove, false);
+				window.addEventListener( 'resize', onWindowResize, false );
+			} //END INIT
+
+
+			function animate() {
+				requestAnimationFrame( animate );
+				render();
+			} //END ANIMATE
+
+			function render(){
+				if ( controlsEnabled === true ) {
+					// raycaster.ray.origin.copy( controls.getObject().position );
+					// raycaster.ray.origin.y -= 10;
+					// var directionVector = globalVertex.sub( MovingCube.position );
+
+					raycaster.setFromCamera( center.normalize(), camera );
+					// console.log(`objects in render: ${objects}`);
+					var intersects = raycaster.intersectObjects( dotContainer );
+					// console.log(`objects: ${objects}`);
+					if ( intersects.length > 0 ) {
+						let cameraPos = new THREE.Vector3();
+						cameraPos.setFromMatrixPosition( camera.matrixWorld );
+						// console.log(`cameraPos: ${cameraPos}; ${cameraPos.x}, ${cameraPos.y}, ${cameraPos.z}`);
+						let distance = distanceVector(cameraPos, intersects[0].object.position);
+						if (distance < 12){
+							// console.log(`id in render: ${intersects[0].object.id}`);
+							removeEntity(intersects[0].object);
+							addEntity(dot);
+							buildBody();
+							points++;
+							console.log(`points: ${points}`);
+						}
+						// console.log(`Check vector camera: ${camera.position}`);
+						// console.log(`Check vector3 intersects: ${intersects[0].object.position}`);
+						// console.log(`Check distance vector: ${distance}`);
+						// console.log(`Distance between camera and object: ${camera.distanceTo( intersects[ 0 ].object )}`);
+						// cameraPos.applyMatrix4( camera.updateMatrixWorld );
+						if ( INTERSECTED != intersects[ 0 ].object ) {
+
+							if ( INTERSECTED ) INTERSECTED.material.emissive.setHex( INTERSECTED.currentHex );
+
+							INTERSECTED = intersects[ 0 ].object;
+							INTERSECTED.currentHex = INTERSECTED.material.emissive.getHex();
+							INTERSECTED.material.emissive.setHex( 0xff0000 );
+
+						}
+
+					} else {
+
+						if ( INTERSECTED ) INTERSECTED.material.emissive.setHex( INTERSECTED.currentHex );
+
+						INTERSECTED = null;
+
+					}
+
+					var onObject = true; /*intersections.length > 0;*/
+					var time = performance.now();
+
+					// console.log(`in render: ${time - startTime}`);
+					// console.log(`${time-startTime%2000}`);
+					// if ((time-startTime%2000) < 100){
+					// 	console.log(`in render: 2000 time gap`);
+					// }
+					var delta = ( time - prevTime ) / 1000;
+					velocity.x -= velocity.x * 10.0 * delta;
+					velocity.z -= velocity.z * 10.0 * delta;
+					velocity.y -= 9.8 /** 100.0*/ * delta; // 100.0 = mass
+					direction.z = Number( moveForward ) - Number( moveBackward );
+					direction.x = Number( moveLeft ) - Number( moveRight );
+					direction.normalize(); // this ensures consistent movements in all directions
+					if ( moveForward || moveBackward ) velocity.z -= direction.z * 400.0 * delta;
+					if ( moveLeft || moveRight ) velocity.x -= direction.x * 400.0 * delta;
+					if ( onObject === true ) {
+						velocity.y = Math.max( 0, velocity.y );
+						canJump = true;
+					}
+					console.log(`camera position: ${controls.getObject().x}, ${controls.getObject().y}, ${controls.getObject().z}`);
+					controls.getObject().translateX( velocity.x * delta );
+					controls.getObject().translateY( velocity.y * delta );
+					controls.getObject().translateZ( velocity.z * delta );
+					if ( controls.getObject().position.y < 10 ) {
+						velocity.y = 0;
+						controls.getObject().position.y = 10;
+						canJump = true;
+					}
+					prevTime = time;
+				}
+
+				renderer.render( scene, camera );
+			} //END RENDER
+
+		
+			function buildBody(){
+				let cameraPos = new THREE.Vector3();
+				cameraPos.setFromMatrixPosition( camera.matrixWorld );
+
+				let bodyGeometry = new THREE.BoxGeometry( 20, 20, 20, 1);
+				let bodyBox = new THREE.Mesh( bodyGeometry, new THREE.MeshBasicMaterial({ color: 0x82271C, transparent: true, opacity: 0.8 })  );
+				console.log(`in buildBody: ${cameraPos}; ${cameraPos.x}, ${cameraPos.y}, ${cameraPos.z}`);
+
+				scene.add( boundary );
+			}
+
+			function addEntity(object){
+				let c1 = corners[6],
+						c2 = corners[7],
+						c3 = corners[2],
+						c4 = corners[3];
+																//-250, 250, 250, -250
+				// console.log(`addEntity: ${c1.x}, ${c3.x}, ${c1.z}, ${c2.z}`);
+				let x = Math.floor(Math.random()*250) + 1; // this will get a number between 1 and 99;
+				x *= Math.floor(Math.random()*2) == 1 ? 1 : -1;
+				let z = Math.floor(Math.random()*250) + 1; // this will get a number between 1 and 99;
+				z *= Math.floor(Math.random()*2) == 1 ? 1 : -1;
+				// let x =	Math.floor(Math.random() * c3.x) - c1.x;
+				// let y = Math.floor(Math.random());
+				// let z =	Math.floor(Math.random() * c2.z) - c1.z;
+				console.log(`in addEntity: ${x}, ${z}`);
+				object.position.set(x, 10, z);
+				scene.add(object);
+			}
+
+			function findCorners(object){
+				let width = object.geometry.parameters.width;
+				let height = object.geometry.parameters.height;
+				let depth = object.geometry.parameters.depth;
+
+				let corners = [];
+				let c = [];
+				corners.push(new THREE.Vector3(object.position.x + width/2, object.position.y + height/2, object.position.z + depth/2));
+				corners.push(new THREE.Vector3(object.position.x + width/2, object.position.y + height/2, object.position.z - depth/2));
+				corners.push(new THREE.Vector3(object.position.x + width/2, object.position.y - height/2, object.position.z + depth/2));
+				corners.push(new THREE.Vector3(object.position.x + width/2, object.position.y - height/2, object.position.z - depth/2));
+				corners.push(new THREE.Vector3(object.position.x - width/2, object.position.y + height/2, object.position.z + depth/2));
+				corners.push(new THREE.Vector3(object.position.x - width/2, object.position.y + height/2, object.position.z - depth/2));
+				corners.push(new THREE.Vector3(object.position.x - width/2, object.position.y - height/2, object.position.z + depth/2));
+				corners.push(new THREE.Vector3(object.position.x - width/2, object.position.y - height/2, object.position.z - depth/2));
+
+				// console.log(`corners in findCorners: ${corners[1].x}, ${corners[1].y}, ${corners[1].z}`);
+				for (let i = 0; i < corners.length; i++){
+					c.push(new THREE.Mesh( new THREE.SphereGeometry( 10, 32, 32 ), new THREE.MeshLambertMaterial( { color: 0xffff00 } ) ));
+					c[i].position.set(corners[i].x, corners[i].y, corners[i].z);
+					console.log(`added circle in findCorners: ${c[i].position.x}, ${c[i].position.y}, ${c[i].position.z}`);
+					scene.add(c[i]);
+				}
+				return corners;
+			}
+
+			function removeEntity(object) {
+		    var selectedObject = scene.getObjectById(object.id);
+				// objects.shift();
+				// console.log(`id in removeEntity: ${object.id}`);
+		    scene.remove( selectedObject );
+			}
+
+			function distanceVector( v1, v2 )
+			{
+				// console.log(`v1: ${v1.x}, ${v1.y}, ${v1.z}`);
+				// console.log(`v2: ${v2.x}, ${v2.y}, ${v2.z}`);
+
+		    var dx = v1.x - v2.x;
+		    var dy = v1.y - v2.y;
+		    var dz = v1.z - v2.z;
+				// var distance = new THREE.Vector3(dx, dy, dz);
+				// return distance;
+		    return Math.sqrt( dx * dx + dy * dy + dz * dz );
+			}
+
+			function onWindowResize() {
+				camera.aspect = window.innerWidth / window.innerHeight;
+				camera.updateProjectionMatrix();
+				renderer.setSize( window.innerWidth, window.innerHeight );
+			}
+
+			// function onDocumentMouseMove(event) {
+		  //   // the following line would stop any other event handler from firing
+		  //   event.preventDefault();
+			//
+		  //   // update the mouse variable
+		  //   // mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+		  //   // mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+			// 	console.log(`Mouse: ${mouse.x}, ${mouse.y}`);
+		  // }
+		</script>
+	</body>
+</html>

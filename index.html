@@ -52,16 +52,16 @@
 			font-size: 1.5em;
 		}
 		#scoreboard{
-			font-size: 5em;
+			font-size: 2em;
 			font-family: sans-serif;
-			padding: 4%;
-			width: 100px;
-			height: 100px;
-			/* text-align: center; */
+			padding: 2%;
 			position: fixed;
 			top: 0;
 			left: 0;
 			z-index: 5;
+		}
+		#score{
+			height: auto;
 		}
 		a, a:link{
 			color: #33ccff;
@@ -76,6 +76,35 @@
 		a:active{
 			color: #33ccff;
 		}
+
+		.dot {
+		  height: 25px;
+		  width: 25px;
+		  background-color: rgba(187, 187, 187, 0.5);
+		  border-radius: 50%;
+		  display: inline-block;
+			margin: 10px;
+
+		}
+		#aim{
+			position: fixed;
+			left: 49vw;
+			top: 49vh;
+			height: 1.5vh;
+			width: 1vw;
+			border-radius: 50%;
+			display: none;
+
+		}
+		.inactive{
+			border: 1px solid #FFF;
+			background-color: none;
+			transition: ease 0.5s;
+		}
+		.active{
+			background-color: #FFF;
+			transition: ease 0.5s;
+		}
 	</style>
 </head>
 
@@ -86,21 +115,46 @@
 	<div id="scoreboard">
 		<span id="score"></span>
 	</div>
+	<div id="aim" class='inactive'>
+	</div>
 	<div id="blocker">
 		<div id="instructions">
 			<span id="textOne">Click to play</span><br />
 			<span id="textTwo">Don't run into your tail, eat as many dots as you can! <br />Tip: Your tail won't like it when you pass the boundaries.</span>
 		</div>
 	</div>
+	<div class="audioWrapper">
+		<audio id='music' src='./assets/sounds/bg.ogg' loop='true'></audio>
+		<audio id='point' src='./assets/sounds/points.ogg' ></audio>
+		<audio id='lose' src='./assets/sounds/lose.ogg' ></audio>
+	</div>
 
 	<script>
-		var element = document.body;
-		var blocker = document.getElementById('blocker');
-		var instructions = document.getElementById('instructions');
-		var textOne = document.getElementById('textOne');
-		var textTwo = document.getElementById('textTwo');
-		var score = document.getElementById('score');
 
+		const element = document.body;
+		const blocker = document.querySelector('#blocker');
+		const instructions = document.querySelector('#instructions');
+		const textOne = document.querySelector('#textOne');
+		const textTwo = document.querySelector('#textTwo');
+		const score = document.querySelector('#score');
+		const dotPoint = document.createElement('span');
+		dotPoint.setAttribute('class', 'dot');
+		const aim = document.querySelector('#aim');
+		const music = document.querySelector('#music');
+		const pointSound = document.querySelector('#point');
+		const loseSound = document.querySelector('#lose');
+
+		function playLose(){
+			loseSound.currentTime = 0;
+			loseSound.play();
+		}
+		function playPoint(){
+			pointSound.currentTime = 0;
+			pointSound.play();
+		}
+
+		const WIDTH = window.innerWidth;
+		const HEIGHT = window.innerHeight;
 		var animationFrame;
 		var camera, scene, renderer, controls;
 		var dotContainer = [],
@@ -111,17 +165,14 @@
 		var controlsEnabled = false;
 		var moveForward = true;
 		var moveBackward = false;
-		var moveLeft = false;
-		var moveRight = false;
 		var moveUp = true;
 		var moveDown = false;
-		// var canJump = false;
 		var startTime, prevTime;
 		var velocity = new THREE.Vector3(0,0,0);
 		var direction = new THREE.Vector3();
 		var raycaster, objectDetect;
 		var center = new THREE.Vector2(0, 0);
-		var INTERSECTED, MAX_SPEED = 1000;
+		var INTERSECTED, MAX_SPEED = 2000;
 
 		var snake, bodyPartSize = 20,
 			bodyParts = [],
@@ -129,11 +180,13 @@
 		var boundary, boxGeometry, floor,
 			corners = [],
 			points = 0,
-			speed = 400.0;
+			speed = 800.0;
 		var parent, bodyGeometry, bodyMaterial, consumeDot = false;
 		var eatDotPosition = new THREE.Vector3(),
 			currentGlobalPos = new THREE.Vector3(),
 			currentBoundsPos = new THREE.Vector3();
+		let paused = false, gameOver = false;;
+
 
 		var body = {
 			snake: [{
@@ -149,30 +202,12 @@
 			}]
 		};
 
-		var havePointerLock = 'pointerLockElement' in document ||
+
+		const havePointerLock = 'pointerLockElement' in document ||
 													'mozPointerLockElement' in document ||
 													'webkitPointerLockElement' in document;
 
 		if ( havePointerLock ) {
-			var pointerlockchange = function ( event ) {
-				if ( 	document.pointerLockElement === element ||
-							document.mozPointerLockElement === element ||
-							document.webkitPointerLockElement === element ) {
-
-					controlsEnabled = true;
-					controls.enabled = true;
-					blocker.style.display = 'none';
-				} else {
-
-					controls.enabled = false;
-					blocker.style.display = 'block';
-					instructions.style.display = '';
-				}
-			};
-
-			var pointerlockerror = function ( event ) {
-				instructions.style.display = '';
-			};
 
 			// Hook pointer lock state change events
 			document.addEventListener( 'pointerlockchange', pointerlockchange, false );
@@ -183,55 +218,85 @@
 			document.addEventListener( 'mozpointerlockerror', pointerlockerror, false );
 			document.addEventListener( 'webkitpointerlockerror', pointerlockerror, false );
 
-			instructions.addEventListener( 'click', function ( event ) {
-				console.log(`Instructions clicked`);
+			let gameStarted = false;
+			blocker.addEventListener( 'click', function ( event ) {
+				if (gameStarted){
+					resumeGame();
+				} else {
+					console.log(`Instructions clicked`);
+					init();
+					animate();
 					blocker.style.display = 'none';
 					controlsEnabled = true;
 					controls.enabled = true;
-				// Ask the browser to lock the pointer
-				element.requestPointerLock = 	element.requestPointerLock ||
-																			element.mozRequestPointerLock ||
-																			element.webkitRequestPointerLock;
-				element.requestPointerLock();
+					aim.style.display = 'block';
 
+					// Ask the browser to lock the pointer
+					element.requestPointerLock = 	element.requestPointerLock ||
+																				element.mozRequestPointerLock ||
+																				element.webkitRequestPointerLock;
+
+					element.requestPointerLock();
+					gameStarted = !gameStarted;
+				}
 			}, false );
 		} else {
 			instructions.innerHTML = 'Your browser doesn\'t seem to support Pointer Lock API';
 		}
 
-		init();
-		animate();
+		var pointerlockchange = function ( event ) {
+			if ( 	document.pointerLockElement === element ||
+						document.mozPointerLockElement === element ||
+						document.webkitPointerLockElement === element ) {
+
+				console.log('The pointer lock status is now locked');
+				blocker.style.display = 'none';
+				aim.style.display = 'block';
+				paused = false;
+				animationFrame = requestAnimationFrame(animate);
+				blocker.style.display = 'none';
+				element.requestPointerLock();
+			} else {
+				console.log('The pointer lock status is now unlocked');
+				paused = true;
+				cancelAnimationFrame(animationFrame);
+				blocker.style.display = 'block';
+				textOne.innerHTML = 'Game Paused';
+				textTwo.innerHTML = 'Press Esc key to resume';
+			}
+
+
+
+		}
+
+		var pointerlockerror = function ( event ) {
+			instructions.style.display = '';
+		};
 
 
 		function init() {
+			music.play();
 			startTime = performance.now();
 			prevTime = performance.now();
 
 			camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 1, 2000);
 			scene = new THREE.Scene();
-			scene.background = new THREE.Color(0xffffff);
-			scene.fog = new THREE.Fog(0xffffff, 0, 750);
-			var light = new THREE.HemisphereLight(0xeeeeff, 0x777788, 0.75);
-			light.position.set(0.5, 1, 0.75);
-			scene.add(light);
+			scene.background = new THREE.Color(0x404040);
+			scene.fog = new THREE.Fog(0xffffff, 500, 1000);
+			var light = new THREE.HemisphereLight(0xffffff, 0x777788, 0.9);
+			light.position.set(0, 1, 0);
 
-			// floor
-			var floorGeometry = new THREE.PlaneGeometry(500, 500, 10, 10);
-			floorGeometry.rotateX(-Math.PI / 2);
-			var floorMaterial = new THREE.MeshBasicMaterial({
-				color: 0x800000
-			});
-			floor = new THREE.Mesh(floorGeometry, floorMaterial);
-			scene.add(floor);
+			scene.add(light);
 
 			//boundary
 			boxGeometry = new THREE.BoxGeometry(500, 500, 500, 10, 10, 10);
-			boundary = new THREE.Mesh(boxGeometry, new THREE.MeshBasicMaterial({
-				color: 0x65d9ee,
+			boundary = new THREE.Mesh(boxGeometry, new THREE.MeshStandardMaterial({
+				color: 0x5eb4f2,
 				wireframe: true
 			}));
+			boundary.material.side = THREE.DoubleSide;
 			boundary.position.set(0, 250.5, 0);
-			boundary.geometry.computeBoundingBox();
+			boundary.recieveShadow = true;
 			scene.add(boundary);
 			corners = findCorners(boundary);
 
@@ -239,6 +304,7 @@
 			controls = new THREE.PointerLockControls(camera);
 			snake = controls.getObject();
 			snake.position.set(0, 10, 250);
+
 			scene.add(snake);
 			parent = snake;
 			snakePrevPos = new THREE.Vector3();
@@ -250,15 +316,17 @@
 			bodyGeometry = new THREE.SphereGeometry(bodyPartSize / 2, 32, 32);
 			bodyMaterial = new THREE.MeshNormalMaterial();
 
-
 			raycaster = new THREE.Raycaster();
-
 
 			// dot objects
 			dotGeometry = new THREE.SphereGeometry(bodyPartSize / 2, 32, 32);
 			dot = new THREE.Mesh(dotGeometry, new THREE.MeshLambertMaterial({
-				color: 0xffffff
+				color: 0xdfdfdf
 			}));
+
+			// dot = new THREE.Mesh(dotGeometry, new THREE.MeshDepthMaterial());
+			dot.material.fog = false;
+			dot.material.lights = true;
 			dot.position.set(0, 10, 0);
 			dot.name = 'dot';
 			dotContainer.push(dot);
@@ -267,6 +335,9 @@
 			renderer = new THREE.WebGLRenderer();
 			renderer.setPixelRatio(window.devicePixelRatio);
 			renderer.setSize(window.innerWidth, window.innerHeight);
+
+			renderer.gammaInput = true;
+			renderer.gammaOutput = true;
 			document.body.appendChild(renderer.domElement);
 
 			window.addEventListener('keydown', onKeyDown, false);
@@ -294,53 +365,63 @@
 				let distance = distanceVector(cameraPos, intersects[0].object.position);
 
 				if (intersects[0].object.name == 'dot'){
-					// console.log('dot detected');
-
+					aim.classList.remove('inactive');
+					aim.classList.add('active');
 					//CONSUMES DOTS
 					if (distance < 12) {
 						snake.getWorldPosition(eatDotPosition);
 
 						consumeDot = true;
-						removeEntity(intersects[0].object);
-						addEntity(dot);
+						updateEntity(dot);
+						addScore();
 
 						if (speed < MAX_SPEED){
-							speed *= 1.1;
+							speed *= 1.05;
 						}
 
 						buildBody();
 
 						points++;
-						score.innerHTML = points;
-						// console.log(`points: ${points}`);
+						playPoint();
 					}
 
-					if (INTERSECTED != intersects[0].object) {
+				}
+				if (intersects[0].object.name != 'dot'){
+					aim.classList.add('inactive');
+					aim.classList.remove('active');
+				}
 
-						if (INTERSECTED) INTERSECTED.material.emissive.setHex(INTERSECTED.currentHex);
-
-						INTERSECTED = intersects[0].object;
-						INTERSECTED.currentHex = INTERSECTED.material.emissive.getHex();
-						INTERSECTED.material.emissive.setHex(0xff0000);
-
-					}
-				} else if (intersects[0].object.name == 'bodyPart'){
-
+				if (intersects[0].object.name == 'bodyPart'){
 					if (distance < 12) {
-						console.log(`bodyParts detected`);
 						endGame();
 					}
 				}
 
-			} else {
-
-				if (INTERSECTED) INTERSECTED.material.emissive.setHex(INTERSECTED.currentHex);
-
-				INTERSECTED = null;
-
 			}
 
+			//snake head movement
 			let time = performance.now();
+
+			let dirVector = new THREE.Vector3();
+			camera.getWorldDirection( dirVector );
+
+			if (dirVector.y > 0){
+				moveUp = true;
+				moveDown = false;
+				if (dirVector.y > 0.98){
+					moveForward = false;
+				} else{
+					moveForward = true;
+				}
+			} else if (dirVector.y < 0){
+				moveUp = false;
+				moveDown = true;
+				if (dirVector.y < -0.98){
+					moveForward = false;
+				} else{
+					moveForward = true;
+				}
+			}
 
 			let delta = (time - prevTime) / 1000;
 			velocity.x -= velocity.x * 10.0 * delta;
@@ -348,29 +429,25 @@
 			velocity.y -= velocity.y * 10.0 * delta;
 
 			// velocity.y -= 9.8 /** 100.0*/ * delta; // 100.0 = mass
+			direction.y = Number(moveDown) - Number(moveUp);
 			direction.z = Number(moveForward) - Number(moveBackward);
 
 			direction.normalize(); // this ensures consistent movements in all directions
-			if (moveForward || moveBackward) velocity.z -= direction.z * speed * delta;
+			if (moveForward) velocity.z -= direction.z * speed * delta;
+			if (moveUp) velocity.y -= direction.y * (speed * dirVector.y) * delta;
+			if (moveDown) velocity.y += direction.y * (speed * dirVector.y) * delta;
+
 
 			snake.getWorldPosition(currentBoundsPos);
 
-			if (currentBoundsPos.x > boundary.geometry.boundingBox.max.x){
-				console.log(`Passed max.x: ${currentBoundsPos.x}`);
-			  snake.position.setX((currentBoundsPos.x*-1) + bodyPartSize/2);
-			}
-			if (currentBoundsPos.x < boundary.geometry.boundingBox.min.x){
-				console.log(`Passed min.x: ${currentBoundsPos.x}`);
-				snake.position.setX((currentBoundsPos.x*-1) - bodyPartSize/2);
-			}
-			if (currentBoundsPos.z > boundary.geometry.boundingBox.max.z){
-				console.log(`Passed max.z: ${currentBoundsPos.z}`);
-				snake.position.setZ((currentBoundsPos.z*-1) + bodyPartSize/2);
-			}
-			if (currentBoundsPos.z < boundary.geometry.boundingBox.min.z){
-				console.log(`Passed min.z: ${currentBoundsPos.z}`);
-				snake.position.setZ((currentBoundsPos.z*-1) - bodyPartSize/2);
-			}
+			if (currentBoundsPos.x > 250 ||
+					currentBoundsPos.x < -250 ||
+					currentBoundsPos.y > 500 ||
+					currentBoundsPos.y < 0 ||
+					currentBoundsPos.z > 250 ||
+					currentBoundsPos.z < -250){
+						endGame();
+					}
 
 			snake.translateX(velocity.x * delta);
 			snake.translateY(velocity.y * delta);
@@ -387,17 +464,10 @@
 		function trackPositionMovement() {
 
 			snake.getWorldPosition(currentGlobalPos);
+
 			let distance = distanceVector(snakePrevPos, currentGlobalPos);
-			// console.log(`trackPositionMovement distance: ${distance}`);
 
-
-			// var matrix = new THREE.Matrix4();
-			// matrix.extractRotation( mesh.matrix );
-
-			// var direction = new THREE.Vector3( 0, 0, 1 );
-			// direction = matrix.multiplyVector3( direction );
-
-			if (distance > bodyPartSize / 2) {
+			if (distance > bodyPartSize) {
 
 				//update position tracking values for head of snake
 				body.snake[0].positions.unshift(new THREE.Vector3(
@@ -408,7 +478,6 @@
 				if (body.snake[0].positions.length > 5) {
 					body.snake[0].positions.pop();
 				}
-
 
 				//update all position tracking values for each body part
 				for (let i = 0; i < bodyParts.length - 1; i++) {
@@ -458,19 +527,16 @@
 			scene.add(bodyMesh);
 		}
 
-		function addEntity(object) {
-			let c1 = corners[6],
-				c2 = corners[7],
-				c3 = corners[2],
-				c4 = corners[3];
+		function updateEntity(object) {
+
 			//-250, 250, 250, -250
 			let x = Math.floor(Math.random() * (250 - bodyPartSize/2)) + 1; // this will get a number between 1 and 240;
-			x *= Math.floor(Math.random() * 2) == 1 ? 1 : -1;
+			x *= Math.floor(Math.random() * 2) == 1 ? 1 : -1; //negative or positive
 			let z = Math.floor(Math.random() * (250 - bodyPartSize/2)) + 1; // this will get a number between 1 and 240;
-			z *= Math.floor(Math.random() * 2) == 1 ? 1 : -1;
+			z *= Math.floor(Math.random() * 2) == 1 ? 1 : -1; //negative or positive
+			let y = Math.floor(Math.random() * (500 - bodyPartSize/2)) + 1;
 
-			object.position.set(x, 10, z); // on flat plane temporarily
-			scene.add(object);
+			object.position.set(x, y, z); // on flat plane temporarily
 		}
 
 		function findCorners(object) {
@@ -491,10 +557,6 @@
 			return corners;
 		}
 
-		function removeEntity(object) {
-			let selectedObject = scene.getObjectById(object.id);
-			scene.remove(selectedObject);
-		}
 
 		function distanceVector(v1, v2) {
 
@@ -506,17 +568,43 @@
 		}
 
 		function endGame(){
+			playLose();
+			gameOver = true;
 			cancelAnimationFrame(animationFrame);
 			blocker.style.display = 'block';
-			textOne.innerHTML = 'Game Over';
+			textOne.innerHTML = (points == 1 ? `You got ${points} point!` : `You got ${points} points!`);
 			textTwo.innerHTML = 'Click <a href="index.html">here</a> to play again';
 			controlsEnabled = false;
 			controls.enabled = false;
 			document.exitPointerLock();
 		}
 
+		function addScore(){
+			score.appendChild(dotPoint.cloneNode());
+		}
+
+		function pauseGame(){
+			paused = true;
+			cancelAnimationFrame(animationFrame);
+			blocker.style.display = 'block';
+			textOne.innerHTML = 'Game Paused';
+			textTwo.innerHTML = 'Press Esc key to resume';
+		}
+		function resumeGame(){
+			paused = false;
+			animationFrame = requestAnimationFrame(animate);
+			blocker.style.display = 'none';
+			element.requestPointerLock();
+		}
+
 		function onKeyDown(event) {
-			console.log(`Key: ${event.keyCode}`);
+			if (!gameOver){
+				if(event.keyCode == 27 && !paused){
+					pauseGame();
+				} else if (event.keyCode == 27 && paused){
+					resumeGame();
+				}
+			}
 		}
 
 		function onWindowResize() {
